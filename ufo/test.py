@@ -1,10 +1,12 @@
 import os
+from pathlib import Path
 from PIL import Image
 import torch
 from torchvision import transforms
 from .model_video import build_model
 import numpy as np
 import argparse
+import importlib
 
 def debug_test(gpu_id, model_path, datapath, save_root_path, group_size, img_size, img_dir_name):
     print(f"DEBUG: Starting UFO test with:")
@@ -141,9 +143,50 @@ if __name__ == '__main__':
     parser.add_argument('--gpu_id', default='cuda:0', help='id of gpu')
     args = parser.parse_args()
     
+    # Ensure packaged weights exist. If not, call the downloader embedded in the package.
+    def ensure_model_weights(model_name='model_best.pth'):
+        pkg_weights_dir = Path(__file__).resolve().parent / 'weights'
+        pkg_weights_dir.mkdir(parents=True, exist_ok=True)
+        packaged_model = pkg_weights_dir / model_name
+        # If already present, nothing to do
+        if packaged_model.exists():
+            return packaged_model
+
+        # Try to run the package downloader; it will place a file named ufo_weights.pth
+        try:
+            downloader = importlib.import_module('.download_ufo_weights', package=__package__)
+            # downloader.main() performs download and copies into installed package weights/
+            if hasattr(downloader, 'main'):
+                downloader.main()
+        except Exception as e:
+            print('Warning: failed to run bundled downloader:', e)
+
+        # After downloader (whether it succeeded or not), check for common candidate weight filenames and return the first that exists.
+        candidates = [
+            pkg_weights_dir / model_name,
+            pkg_weights_dir / 'video_best.pth',
+            pkg_weights_dir / 'ufo_weights.pth',
+            pkg_weights_dir / 'video_weights.pth',
+            pkg_weights_dir / 'weights.pth',
+        ]
+        for c in candidates:
+            if c.exists():
+                return c
+
+        return None
+
+    # run the ensure step once
+    pkg_model = ensure_model_weights('model_best.pth')
+
     gpu_id = args.gpu_id
     device = torch.device(gpu_id)
-    model_path = args.model
+    # Prefer explicit --model if it exists, otherwise use packaged model if available
+    if args.model and os.path.exists(args.model):
+        model_path = args.model
+    elif pkg_model and pkg_model.exists():
+        model_path = str(pkg_model)
+    else:
+        model_path = args.model
     val_datapath = [args.data_path]
     save_root_path = [args.output_dir]
     

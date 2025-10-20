@@ -4,6 +4,7 @@ readme.md
 setup.py
 ufo/Intra_MLP.py
 ufo/__init__.py
+ufo/download_ufo_weights.py
 ufo/model_image.py
 ufo/model_video.py
 ufo/model_video_flow.py
