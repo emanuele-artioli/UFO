@@ -14,6 +14,7 @@ import shutil
 import requests
 from pathlib import Path
 import importlib
+import subprocess
 
 GDRIVE_FILE_ID = "1eIAoCy-sV_9ueC9-KmQKDyc8nex2yWxL"
 FILENAME = "ufo_weights.pth"
@@ -21,33 +22,24 @@ CHUNK_SIZE = 32768
 
 
 def download_from_google_drive(file_id: str, destination: Path):
-    """Download a large file from Google Drive handling confirmation token for virus scan."""
-    URL = "https://docs.google.com/uc?export=download"
-    session = requests.Session()
-
-    response = session.get(URL, params={"id": file_id}, stream=True)
-    token = _get_confirm_token(response)
-
-    if token:
-        params = {"id": file_id, "confirm": token}
-        response = session.get(URL, params=params, stream=True)
-
-    _save_response_content(response, destination)
+    """Download the Google Drive file using gdown only (installing gdown if necessary)."""
+    _try_gdown(file_id, destination)
 
 
-def _get_confirm_token(response):
-    for key, value in response.cookies.items():
-        if key.startswith('download_warning'):
-            return value
-    return None
+def _try_gdown(file_id: str, destination: Path):
+    """Download using gdown. Installs gdown if missing."""
+    try:
+        import gdown
+    except Exception:
+        print('gdown not installed; installing via pip...')
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'gdown'])
+        import gdown
 
-
-def _save_response_content(response, destination: Path):
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with open(destination, "wb") as f:
-        for chunk in response.iter_content(CHUNK_SIZE):
-            if chunk:  # filter out keep-alive chunks
-                f.write(chunk)
+    url = f'https://drive.google.com/uc?id={file_id}'
+    out = str(destination)
+    print(f'Running gdown to fetch {file_id} -> {out}')
+    # Use gdown to download and overwrite if necessary
+    gdown.download(url, out, quiet=False, fuzzy=True)
 
 
 def get_installed_ufo_site_packages_path():
@@ -62,34 +54,40 @@ def get_installed_ufo_site_packages_path():
 
 
 def main():
+    # Prefer downloading directly into the installed package weights folder (site-packages/ufo/weights)
+    site_pkg = get_installed_ufo_site_packages_path()
+    if site_pkg is not None:
+        site_weights_dir = site_pkg / "weights"
+        site_weights_dir.mkdir(parents=True, exist_ok=True)
+        site_dest = site_weights_dir / FILENAME
+
+        if site_dest.exists():
+            print(f"Weights already present in installed package at {site_dest}")
+            print("All done. Installed package weights path:", site_dest)
+            return site_dest
+
+        # Download directly to the installed package weights folder
+        print(f"Downloading weights directly to installed package at {site_dest} ...")
+        download_from_google_drive(GDRIVE_FILE_ID, site_dest)
+        print("Download complete.")
+        print("All done. Installed package weights path:", site_dest)
+        return site_dest
+
+    # Fallback: download to repo-level weights folder if installed package not available
     repo_weights_dir = Path(__file__).resolve().parents[1] / "weights"
     repo_weights_dir.mkdir(parents=True, exist_ok=True)
     local_dest = repo_weights_dir / FILENAME
 
     if local_dest.exists():
         print(f"Weights already downloaded in repo at {local_dest}")
+        print("All done. Repo weights path:", local_dest)
+        return local_dest
     else:
-        print(f"Downloading weights to {local_dest} ...")
+        print(f"Installed package not found; downloading weights to repo path {local_dest} ...")
         download_from_google_drive(GDRIVE_FILE_ID, local_dest)
-        print("Download complete.")
-
-    site_pkg = get_installed_ufo_site_packages_path()
-    if site_pkg is None:
-        print("Installed ufo package not found; leaving weights in the repo.")
-        return
-
-    site_weights_dir = site_pkg / "weights"
-    site_weights_dir.mkdir(parents=True, exist_ok=True)
-    site_dest = site_weights_dir / FILENAME
-
-    if site_dest.exists():
-        print(f"Weights already present in installed package at {site_dest}")
-    else:
-        print(f"Copying weights to installed package at {site_dest} ...")
-        shutil.copy2(local_dest, site_dest)
-        print("Copy complete.")
-
-    print("All done. Installed package weights path:", site_dest)
+        print("Download complete (repo copy).")
+        print("All done. Repo weights path:", local_dest)
+        return local_dest
 
 
 if __name__ == '__main__':

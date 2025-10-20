@@ -143,25 +143,19 @@ if __name__ == '__main__':
     parser.add_argument('--gpu_id', default='cuda:0', help='id of gpu')
     args = parser.parse_args()
     
-    # Ensure packaged weights exist. If not, call the downloader embedded in the package.
+    # Ensure packaged weights exist in the installed package site location. If not, call the downloader.
     def ensure_model_weights(model_name='model_best.pth'):
-        pkg_weights_dir = Path(__file__).resolve().parent / 'weights'
-        pkg_weights_dir.mkdir(parents=True, exist_ok=True)
-        packaged_model = pkg_weights_dir / model_name
-        # If already present, nothing to do
-        if packaged_model.exists():
-            return packaged_model
-
-        # Try to run the package downloader; it will place a file named ufo_weights.pth
+        # Resolve installed package weights directory
         try:
-            downloader = importlib.import_module('.download_ufo_weights', package=__package__)
-            # downloader.main() performs download and copies into installed package weights/
-            if hasattr(downloader, 'main'):
-                downloader.main()
-        except Exception as e:
-            print('Warning: failed to run bundled downloader:', e)
+            import ufo as _ufo_pkg
+            pkg_weights_dir = Path(_ufo_pkg.__file__).parent / 'weights'
+            pkg_weights_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            # Fallback to local package path
+            pkg_weights_dir = Path(__file__).resolve().parent / 'weights'
+            pkg_weights_dir.mkdir(parents=True, exist_ok=True)
 
-        # After downloader (whether it succeeded or not), check for common candidate weight filenames and return the first that exists.
+        # Candidate files to accept
         candidates = [
             pkg_weights_dir / model_name,
             pkg_weights_dir / 'video_best.pth',
@@ -169,6 +163,23 @@ if __name__ == '__main__':
             pkg_weights_dir / 'video_weights.pth',
             pkg_weights_dir / 'weights.pth',
         ]
+
+        # If any candidate exists, return it
+        for c in candidates:
+            if c.exists():
+                return c
+
+        # Otherwise try to run the downloader which will write directly into the package weights dir
+        try:
+            downloader = importlib.import_module('.download_ufo_weights', package=__package__)
+            if hasattr(downloader, 'main'):
+                downloaded = downloader.main()
+                if downloaded is not None:
+                    return Path(downloaded)
+        except Exception as e:
+            print('Warning: failed to run bundled downloader:', e)
+
+        # Re-check candidates and return first that exists
         for c in candidates:
             if c.exists():
                 return c
