@@ -1,0 +1,16 @@
+LICENSE
+pyproject.toml
+readme.md
+setup.py
+ufo/Intra_MLP.py
+ufo/__init__.py
+ufo/model_image.py
+ufo/model_video.py
+ufo/model_video_flow.py
+ufo/test.py
+ufo/transformer.py
+ufo.egg-info/PKG-INFO
+ufo.egg-info/SOURCES.txt
+ufo.egg-info/dependency_links.txt
+ufo.egg-info/requires.txt
+ufo.egg-info/top_level.txt

@@ -1,14 +1,9 @@
-from setuptools import setup
-import glob
-import os
-
-# Collect top-level python modules in the repo root (excluding setup files)
-py_files = [os.path.splitext(os.path.basename(p))[0] for p in glob.glob("*.py") if os.path.basename(p) not in ("setup.py", "setup.cfg")]
+from setuptools import find_packages, setup
 
 setup(
     name="UFO",
-    version="0.1.0",
+    version="0.2.0",
     description="UFO - Unified Framework for Co-Object Segmentation (local editable install)",
-    py_modules=py_files,
+    packages=find_packages(include=["ufo", "ufo.*"]),
     include_package_data=True,
 )
