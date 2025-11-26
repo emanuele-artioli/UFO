@@ -15,6 +15,9 @@ import requests
 from pathlib import Path
 import importlib
 import subprocess
+import logging
+
+logger = logging.getLogger(__name__)
 
 GDRIVE_FILE_ID = "1eIAoCy-sV_9ueC9-KmQKDyc8nex2yWxL"
 FILENAME = "ufo_weights.pth"
@@ -31,15 +34,14 @@ def _try_gdown(file_id: str, destination: Path):
     try:
         import gdown
     except Exception:
-        print('gdown not installed; installing via pip...')
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'gdown'])
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q', 'gdown'])
         import gdown
 
     url = f'https://drive.google.com/uc?id={file_id}'
     out = str(destination)
-    print(f'Running gdown to fetch {file_id} -> {out}')
+    logger.debug(f'Running gdown to fetch {file_id} -> {out}')
     # Use gdown to download and overwrite if necessary
-    gdown.download(url, out, quiet=False, fuzzy=True)
+    gdown.download(url, out, quiet=True, fuzzy=True)
 
 
 def get_installed_ufo_site_packages_path():
@@ -48,12 +50,16 @@ def get_installed_ufo_site_packages_path():
         import ufo
         pkg_dir = Path(ufo.__file__).parent
         return pkg_dir
-    except Exception as e:
-        print("Error: could not import installed 'ufo' package:", e)
+    except Exception:
         return None
 
 
 def main():
+    """Download UFO weights if not already present.
+    
+    Returns:
+        Path to the downloaded weights file.
+    """
     # Prefer downloading directly into the installed package weights folder (site-packages/ufo/weights)
     site_pkg = get_installed_ufo_site_packages_path()
     if site_pkg is not None:
@@ -62,15 +68,12 @@ def main():
         site_dest = site_weights_dir / FILENAME
 
         if site_dest.exists():
-            print(f"Weights already present in installed package at {site_dest}")
-            print("All done. Installed package weights path:", site_dest)
+            logger.debug(f"Weights already present at {site_dest}")
             return site_dest
 
         # Download directly to the installed package weights folder
-        print(f"Downloading weights directly to installed package at {site_dest} ...")
+        logger.debug(f"Downloading weights to {site_dest} ...")
         download_from_google_drive(GDRIVE_FILE_ID, site_dest)
-        print("Download complete.")
-        print("All done. Installed package weights path:", site_dest)
         return site_dest
 
     # Fallback: download to repo-level weights folder if installed package not available
@@ -79,16 +82,16 @@ def main():
     local_dest = repo_weights_dir / FILENAME
 
     if local_dest.exists():
-        print(f"Weights already downloaded in repo at {local_dest}")
-        print("All done. Repo weights path:", local_dest)
+        logger.debug(f"Weights already present at {local_dest}")
         return local_dest
     else:
-        print(f"Installed package not found; downloading weights to repo path {local_dest} ...")
+        logger.debug(f"Downloading weights to {local_dest} ...")
         download_from_google_drive(GDRIVE_FILE_ID, local_dest)
-        print("Download complete (repo copy).")
-        print("All done. Repo weights path:", local_dest)
         return local_dest
 
 
 if __name__ == '__main__':
-    main()
+    # Enable logging output when run as a script
+    logging.basicConfig(level=logging.INFO)
+    result = main()
+    print(f"Weights available at: {result}")
